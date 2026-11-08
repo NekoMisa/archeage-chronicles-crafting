@@ -24,6 +24,8 @@ Use **Edit selected** to load an item from the list into the picker. Change its 
 
 The guide combines shared ingredients across the list before rounding up to whole batches. It orders intermediate crafts before the steps that consume them and tells you how many to keep when an intermediate is also on your list. **Copy plan** copies the requested items, the combined shopping list, the ordered steps, and the total gold cost.
 
+Check off a crafting step to move it into **Done**. Expand **Done** and uncheck a step to put it back in order. You can also select a step and press **Space**. Checkmarks last for the current session and reset for any step whose recipe or batch count changes.
+
 Double-click a material in the shopping list or under a crafting step to open its source page in your browser. You can also select the material and press **Enter**. The linked pages show gathering locations, vendors, enemy drops, or recipes depending on the item. Materials added to your catalog without a direct link open a search for the item name.
 
 ## Recipe data

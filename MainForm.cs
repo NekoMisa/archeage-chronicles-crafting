@@ -37,7 +37,7 @@ internal sealed class MainForm : Form
         ForeColor = Teal, Font = new Font("Segoe UI", 11, FontStyle.Bold)
     };
     private readonly Button copy = new() { Text = "Copy plan", Dock = DockStyle.Right, Width = 104 };
-    private readonly TreeView steps = new()
+    private readonly CraftStepTree steps = new()
     {
         Dock = DockStyle.Fill, BorderStyle = BorderStyle.None, ShowNodeToolTips = true,
         AccessibleName = "Crafting steps", HideSelection = false, FullRowSelect = true, ItemHeight = 23
@@ -306,13 +306,11 @@ internal sealed class MainForm : Form
 
     private void RefreshPlan()
     {
-        steps.BeginUpdate();
         materials.BeginUpdate();
         try
         {
             currentPlan = null;
             copy.Enabled = false;
-            steps.Nodes.Clear();
             materials.Items.Clear();
             CraftingPlan plan;
             string output;
@@ -334,25 +332,7 @@ internal sealed class MainForm : Form
 
             summary.Text = $"{output}  ·  {plan.Steps.Count:N0} steps  ·  {plan.Gold:N0} gold total";
 
-            for (var index = 0; index < plan.Steps.Count; index++)
-            {
-                var step = plan.Steps[index];
-                var title = StepTitle(step, index);
-                var node = steps.Nodes.Add(title);
-                node.ToolTipText = title;
-                node.Nodes.Add(StepDetails(step)).ForeColor = Muted;
-                if (StepOutputNote(step) is { } note)
-                    node.Nodes.Add(note).ForeColor = Teal;
-                foreach (var (item, amount) in step.Recipe.Materials)
-                {
-                    node.Nodes.Add(new TreeNode($"{item}  ×{step.Batches * amount:N0}")
-                    {
-                        Tag = item, ForeColor = Teal, ToolTipText = MaterialToolTip(item)
-                    });
-                }
-                node.Expand();
-            }
-            steps.TopNode = steps.Nodes[0];
+            steps.SetSteps(plan.Steps, CreateStepNode);
 
             foreach (var (item, amount) in plan.Materials.OrderBy(material => material.Key))
             {
@@ -377,9 +357,27 @@ internal sealed class MainForm : Form
         }
         finally
         {
+            if (currentPlan is null)
+                steps.SetSteps([], CreateStepNode);
             materials.EndUpdate();
-            steps.EndUpdate();
         }
+    }
+
+    private static TreeNode CreateStepNode(CraftStep step, int index)
+    {
+        var title = StepTitle(step, index);
+        var node = new TreeNode(title) { ToolTipText = $"{title}\nClick the checkbox or press Space to toggle completion." };
+        node.Nodes.Add(StepDetails(step)).ForeColor = Muted;
+        if (StepOutputNote(step) is { } note)
+            node.Nodes.Add(note).ForeColor = Teal;
+        foreach (var (item, amount) in step.Recipe.Materials)
+        {
+            node.Nodes.Add(new TreeNode($"{item}  ×{step.Batches * amount:N0}")
+            {
+                Tag = item, ForeColor = Teal, ToolTipText = MaterialToolTip(item)
+            });
+        }
+        return node;
     }
 
     private static string MaterialToolTip(string item) => $"{item}\nDouble-click or press Enter to find sources.";
