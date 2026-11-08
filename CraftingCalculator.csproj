@@ -5,7 +5,8 @@
     <UseWindowsForms>true</UseWindowsForms>
     <ImplicitUsings>enable</ImplicitUsings>
     <Nullable>enable</Nullable>
-    <Version>0.1.0</Version>
+    <Version>0.1.1</Version>
+    <ApplicationIcon>assets/forge.ico</ApplicationIcon>
     <ReleaseRepository Condition="'$(ReleaseRepository)' == ''">NekoMisa/archeage-chronicles-crafting</ReleaseRepository>
   </PropertyGroup>
   <ItemGroup>

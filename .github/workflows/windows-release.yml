@@ -35,7 +35,7 @@ jobs:
 
           dotnet publish CraftingCalculator.csproj -c Release -r win-x64 --self-contained true -o $publishDir "-p:Version=$version" "-p:ReleaseRepository=$env:GITHUB_REPOSITORY"
           dotnet tool install vpk --version 1.2.161 --tool-path $toolDir
-          & (Join-Path $toolDir 'vpk.exe') pack --packId ArcheAgeChroniclesCrafting --packTitle 'ArcheAge Chronicles Crafting' --packVersion $version --packDir $publishDir --mainExe CraftingCalculator.exe --runtime win-x64 --outputDir $releaseDir
+          & (Join-Path $toolDir 'vpk.exe') pack --packId ArcheAgeChroniclesCrafting --packTitle 'ArcheAge Chronicles Crafting' --packVersion $version --packDir $publishDir --mainExe CraftingCalculator.exe --runtime win-x64 --icon assets/forge.ico --outputDir $releaseDir
 
       - name: Publish to GitHub Releases
         shell: pwsh

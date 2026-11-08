@@ -12,7 +12,8 @@ internal static class Program
         try
         {
             var catalog = RecipeCatalog.Load(Path.Combine(AppContext.BaseDirectory, "recipes.json"));
-            var form = new MainForm(catalog);
+            using var icon = Icon.ExtractAssociatedIcon(Application.ExecutablePath);
+            using var form = new MainForm(catalog) { Icon = icon };
             AppUpdates.Enable(form, catalog);
             Application.Run(form);
         }

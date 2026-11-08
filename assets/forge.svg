@@ -1,0 +1,33 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="256" height="256" viewBox="0 0 256 256">
+  <title>ArcheAge Chronicles Crafting Calculator</title>
+  <defs>
+    <linearGradient id="tile" x1="0" y1="0" x2="0" y2="1" gradientUnits="objectBoundingBox">
+      <stop stop-color="#284650"/>
+      <stop offset="1" stop-color="#10232f"/>
+    </linearGradient>
+    <linearGradient id="metal" x1="0" y1="0" x2="0" y2="1" gradientUnits="objectBoundingBox">
+      <stop stop-color="#c1fae9"/>
+      <stop offset="0.4" stop-color="#81d9c6"/>
+      <stop offset="1" stop-color="#429f9b"/>
+    </linearGradient>
+    <linearGradient id="brass" x1="0" y1="0" x2="0" y2="1" gradientUnits="objectBoundingBox">
+      <stop stop-color="#ffe7a3"/>
+      <stop offset="1" stop-color="#edac59"/>
+    </linearGradient>
+  </defs>
+
+  <rect x="10" y="10" width="236" height="236" rx="56" fill="#0c1c25"/>
+  <rect x="12" y="10" width="232" height="230" rx="54" fill="url(#tile)" stroke="#4e7279" stroke-width="3"/>
+
+  <path d="M55 146h147a3 3 0 0 1 2 5c-15 15-32 22-55 23h-5c1 12 6 20 16 23h12a6 6 0 0 1 6 6v6H79v-6a6 6 0 0 1 6-6h12c11-4 15-11 16-23H80a14 14 0 0 1-12-6l-6-7h-7a6 6 0 0 1-6-6v-3a6 6 0 0 1 6-6Z"
+        fill="url(#metal)"/>
+  <path d="M57 150h135" fill="none" stroke="#e2fff3" stroke-width="3" stroke-linecap="round" opacity=".55"/>
+
+  <g transform="translate(102 88) rotate(-42)">
+    <path d="M-8 7H8v49a5 5 0 0 1-5 5h-6a5 5 0 0 1-5-5Z" fill="#d38b50"/>
+    <path d="M-35-16h15l7 4h28l7-4h12a6 6 0 0 1 6 6v20a6 6 0 0 1-6 6H22l-7-4h-28l-7 4h-15a6 6 0 0 1-6-6v-20a6 6 0 0 1 6-6Z"
+          fill="url(#brass)"/>
+  </g>
+
+  <path d="m175 79 5 13 13 5-13 5-5 13-5-13-13-5 13-5Z" fill="#ffe3a2"/>
+</svg>
