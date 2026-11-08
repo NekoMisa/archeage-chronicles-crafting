@@ -69,6 +69,33 @@ internal sealed record CraftingPlan(IReadOnlyList<CraftTarget> Targets, IReadOnl
     IReadOnlyDictionary<string, long> Materials, IReadOnlyDictionary<string, long> UsedInventory)
 {
     public long Gold => Steps.Sum(step => step.Gold);
+
+    public IReadOnlyDictionary<string, long> MaterialsAfterCrafts(IEnumerable<CompletedBatch> completed)
+    {
+        var done = completed.ToHashSet();
+        if (done.Count == 0)
+            return Materials;
+
+        var demand = Targets.ToDictionary(target => target.Recipe.Item, target => target.Quantity,
+            StringComparer.OrdinalIgnoreCase);
+        for (var index = Steps.Count - 1; index >= 0; index--)
+        {
+            var step = Steps[index];
+            if (!demand.Remove(step.Recipe.Item, out var needed)
+                || done.Contains(new CompletedBatch(step.Recipe, step.Batches)))
+                continue;
+
+            // Stock allocated in the original plan may already have gone into completed crafts.
+            var batches = CraftingPlanner.BatchesFor(Math.Min(needed, step.Needed), step.Recipe.Output);
+            foreach (var (item, amount) in step.Recipe.Materials)
+                demand[item] = checked(demand.GetValueOrDefault(item) + batches * amount);
+        }
+
+        return Materials.Select(material =>
+                (material.Key, Quantity: Math.Min(material.Value, demand.GetValueOrDefault(material.Key))))
+            .Where(material => material.Quantity > 0)
+            .ToDictionary(material => material.Key, material => material.Quantity, StringComparer.OrdinalIgnoreCase);
+    }
 }
 
 internal sealed class CraftingPlanner(RecipeCatalog catalog)
@@ -116,9 +143,7 @@ internal sealed class CraftingPlanner(RecipeCatalog catalog)
 
             var reserved = requested.GetValueOrDefault(recipe.Item)?.Quantity ?? 0;
             var neededFromCrafting = Math.Max(reserved, needed - OnHand(recipe.Item));
-            var batches = Math.DivRem(neededFromCrafting, recipe.Output, out var remainder);
-            if (remainder > 0)
-                batches++;
+            var batches = BatchesFor(neededFromCrafting, recipe.Output);
 
             // A batch's surplus can cover ingredients before any stock is used.
             var fromStock = Math.Max(0, needed - checked(batches * recipe.Output));
@@ -170,5 +195,11 @@ internal sealed class CraftingPlanner(RecipeCatalog catalog)
             visited.Add(recipe.Item);
             craftOrder.Add(recipe);
         }
+    }
+
+    internal static long BatchesFor(long quantity, int output)
+    {
+        var batches = Math.DivRem(quantity, output, out var remainder);
+        return remainder == 0 ? batches : batches + 1;
     }
 }

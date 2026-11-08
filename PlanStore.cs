@@ -20,6 +20,7 @@ internal sealed record SavedTarget(string Item, string Profession, int Level, in
 }
 
 internal sealed record CompletedBatch(Recipe Recipe, long Batches);
+internal sealed record GatheredMaterial(long PlanQuantity, long Quantity);
 
 internal sealed class SavedPlan
 {
@@ -29,6 +30,7 @@ internal sealed class SavedPlan
     public SavedTarget? Preview { get; set; }
     public Dictionary<string, long> Inventory { get; set; } = new(StringComparer.OrdinalIgnoreCase);
     public CompletedBatch[] Completed { get; set; } = [];
+    public Dictionary<string, GatheredMaterial> Gathered { get; set; } = new(StringComparer.OrdinalIgnoreCase);
 }
 
 internal sealed class PlanBook
@@ -64,7 +66,7 @@ internal sealed class PlanStore(string path)
         var book = JsonSerializer.Deserialize<PlanBook>(contents, FormatOptions);
         if (book is null || book.Format != 1 || book.Plans is null || book.Plans.Count == 0
             || book.Plans.Any(plan => plan is null || plan.Id == Guid.Empty || string.IsNullOrWhiteSpace(plan.Name)
-                || plan.Targets is null || plan.Inventory is null || plan.Completed is null)
+                || plan.Targets is null || plan.Inventory is null || plan.Completed is null || plan.Gathered is null)
             || book.Plans.Select(plan => plan.Id).Distinct().Count() != book.Plans.Count
             || book.Plans.Select(plan => plan.Name).Distinct(StringComparer.OrdinalIgnoreCase).Count() != book.Plans.Count)
         {

@@ -46,11 +46,11 @@ internal sealed partial class MainForm : Form
     {
         Dock = DockStyle.Fill, BorderStyle = BorderStyle.None, View = View.Details,
         HeaderStyle = ColumnHeaderStyle.Nonclickable, FullRowSelect = true, GridLines = true,
-        MultiSelect = false, AccessibleName = "Total materials to obtain", ShowItemToolTips = true
+        MultiSelect = false, CheckBoxes = true, AccessibleName = "Total materials to obtain", ShowItemToolTips = true
     };
     private readonly Label emptyMaterials = new()
     {
-        Text = "All materials are on hand.", Dock = DockStyle.Fill, Visible = false, ForeColor = Muted
+        Text = "No materials left to obtain.", Dock = DockStyle.Fill, Visible = false, ForeColor = Muted
     };
     private CraftingPlan? currentPlan;
 
@@ -134,15 +134,10 @@ internal sealed partial class MainForm : Form
         lists.RowStyles.Add(new RowStyle(SizeType.Percent, 48));
         lists.RowStyles.Add(new RowStyle(SizeType.Percent, 52));
         lists.Controls.Add(CreateSection("Craft list", CreateCraftList()), 0, 0);
-        var materialPanel = new Panel { Dock = DockStyle.Fill };
-        materialPanel.Controls.Add(materials);
-        materialPanel.Controls.Add(emptyMaterials);
-        lists.Controls.Add(CreateSection("Materials to obtain", materialPanel), 0, 1);
+        lists.Controls.Add(CreateSection("Materials to obtain", CreateMaterialChecklist()), 0, 1);
         results.Controls.Add(lists, 1, 0);
         workspace.Controls.Add(results, 0, 3);
 
-        SetQuantityColumns(materials, "Material");
-        materials.ItemActivate += (_, _) => OpenMaterialSource(materials.FocusedItem?.Tag);
         steps.NodeMouseDoubleClick += (_, e) =>
         {
             if (e.Button == MouseButtons.Left)
@@ -170,7 +165,11 @@ internal sealed partial class MainForm : Form
             picker.ListRequested += (_, _) => AddOrUpdateTarget(picker);
         }
         professions.SelectedIndexChanged += (_, _) => PickerChanged();
-        steps.CompletionChanged += (_, _) => SaveActivePlan();
+        steps.CompletionChanged += (_, _) =>
+        {
+            RefreshMaterials();
+            SaveActivePlan();
+        };
         FormClosing += (_, _) => SaveActivePlan();
         ActivatePlan(ActivePlan);
     }
@@ -318,14 +317,10 @@ internal sealed partial class MainForm : Form
 
     private void RefreshPlan()
     {
-        materials.BeginUpdate();
         try
         {
             currentPlan = null;
             copy.Enabled = false;
-            emptyMaterials.Visible = false;
-            materials.Visible = true;
-            materials.Items.Clear();
             CraftingPlan plan;
             string output;
             if (targets.Count > 0)
@@ -348,22 +343,6 @@ internal sealed partial class MainForm : Form
 
             steps.SetSteps(plan.Steps, CreateStepNode);
 
-            foreach (var (item, amount) in plan.Materials.OrderBy(material => material.Key))
-            {
-                var used = plan.UsedInventory.GetValueOrDefault(item);
-                var tooltip = MaterialToolTip(item);
-                if (used > 0)
-                    tooltip += $"\nUsing {used:N0} from inventory.";
-                var row = new ListViewItem([item, amount.ToString("N0")])
-                {
-                    Tag = item, ToolTipText = tooltip, UseItemStyleForSubItems = false
-                };
-                row.SubItems[0].ForeColor = Teal;
-                materials.Items.Add(row);
-            }
-
-            materials.Visible = plan.Materials.Count > 0;
-            emptyMaterials.Visible = plan.Materials.Count == 0;
             currentPlan = plan;
             copy.Enabled = true;
         }
@@ -379,7 +358,7 @@ internal sealed partial class MainForm : Form
         {
             if (currentPlan is null)
                 steps.SetSteps([], CreateStepNode);
-            materials.EndUpdate();
+            RefreshMaterials();
         }
     }
 
@@ -448,7 +427,7 @@ internal sealed partial class MainForm : Form
             text.AppendLine($"  {target.Recipe.Item} ×{target.Quantity:N0} ({target.Recipe.Profession} Lv {target.Recipe.Level})");
 
         text.AppendLine().AppendLine("Materials to obtain");
-        foreach (var (item, amount) in plan.Materials.OrderBy(material => material.Key))
+        foreach (var (item, amount) in remainingMaterials.OrderBy(material => material.Key))
             text.AppendLine($"  {item} ×{amount:N0}");
 
         if (plan.UsedInventory.Count > 0)

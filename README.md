@@ -32,6 +32,8 @@ Use **New…** to start a separate named plan and the **Plan** dropdown to switc
 
 Open **Inventory…** and enter how many materials or intermediate items you have on hand. The guide uses those counts before calculating extra ingredient crafts and shows the remaining shopping list. Requested items are still made in full. **Copy plan** lists the stock used alongside the materials you still need.
 
+Checking off a craft updates **Materials to obtain** for the unfinished work. Check a material there to mark the displayed quantity as gathered. Open **Gathered** and uncheck it to undo. Gathered marks save with the plan and reset for an item when an edit changes its original shopping quantity.
+
 Double-click a material in the shopping list or under a crafting step to open its source page in your browser. You can also select the material and press **Enter**. The linked pages show gathering locations, vendors, enemy drops, or recipes depending on the item. Materials added to your catalog without a direct link open a search for the item name.
 
 ## Recipe data

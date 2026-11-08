@@ -6,7 +6,7 @@ Effective November 8, 2026.
 
 ArcheAge Chronicles Crafting Calculator does not collect personal information, usage analytics, or crash reports. It does not require an account. Crafting selections, quantities, and calculations stay on your device. **Copy plan** puts the plan on your Windows clipboard when you choose it.
 
-The app stores your named plans, craft lists, inventory counts, and completed steps locally in `%LOCALAPPDATA%\ArcheAgeChroniclesCraftingData\plans.json`. It uses that file to reopen your plans after a restart or update.
+The app stores your named plans, craft lists, inventory counts, gathered materials, and completed steps locally in `%LOCALAPPDATA%\ArcheAgeChroniclesCraftingData\plans.json`. It uses that file to reopen your plans after a restart or update.
 
 ## Updates and external links
 

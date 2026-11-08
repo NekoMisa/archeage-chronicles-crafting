@@ -123,6 +123,13 @@ internal sealed partial class MainForm
                 if (!string.IsNullOrWhiteSpace(item) && amount > 0)
                     inventory[item] = amount;
             }
+            gathered.Clear();
+            foreach (var (item, mark) in plan.Gathered)
+            {
+                if (!string.IsNullOrWhiteSpace(item) && mark is { Quantity: > 0 } && mark.Quantity <= mark.PlanQuantity)
+                    gathered[item] = mark;
+            }
+            showingGathered = false;
             steps.RestoreCompleted(plan.Completed
                 .Where(batch => batch is { Recipe: not null, Batches: > 0 })
                 .Select(batch => (Recipe: catalog.FindUnchangedRecipe(batch.Recipe), batch.Batches))
@@ -176,6 +183,7 @@ internal sealed partial class MainForm
                 && saved.Resolve(catalog) is null && !targets.ContainsKey(saved.Item))).ToArray();
         plan.Inventory = new Dictionary<string, long>(inventory, StringComparer.OrdinalIgnoreCase);
         plan.Completed = steps.Completed.ToArray();
+        plan.Gathered = new Dictionary<string, GatheredMaterial>(gathered, StringComparer.OrdinalIgnoreCase);
         plan.Preview = targets.Count == 0 && ActivePicker.SelectedRecipe is { } recipe
             ? SavedTarget.From(new CraftTarget(recipe, ActivePicker.Quantity)) : null;
     }
@@ -188,7 +196,7 @@ internal sealed partial class MainForm
 
         CaptureActivePlan();
         var plan = ActivePlan;
-        if (plan.Targets.Length > 0 || plan.Completed.Length > 0 || plan.Inventory.Count > 0)
+        if (plan.Targets.Length > 0 || plan.Completed.Length > 0 || plan.Inventory.Count > 0 || plan.Gathered.Count > 0)
         {
             const string title = "Recovered plan";
             var name = title;
