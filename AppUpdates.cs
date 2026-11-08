@@ -2,7 +2,6 @@ using System.Diagnostics;
 using System.Reflection;
 using System.Text.Json;
 using Velopack;
-using Velopack.Sources;
 
 namespace CraftingCalculator;
 
@@ -16,7 +15,7 @@ internal static class AppUpdates
     {
         var repository = typeof(AppUpdates).Assembly.GetCustomAttributes<AssemblyMetadataAttribute>()
             .Single(attribute => attribute.Key == "ReleaseRepository").Value;
-        var manager = new UpdateManager(new GithubSource($"https://github.com/{repository}", null, false));
+        var manager = new UpdateManager(new GithubUpdateSource($"https://github.com/{repository}"));
         if (!manager.IsInstalled)
             return;
 
@@ -27,6 +26,7 @@ internal static class AppUpdates
     private static async Task DownloadAndInstallAsync(MainForm form, UpdateManager manager)
     {
         var title = form.Text;
+        var updateFailed = false;
         try
         {
             var package = manager.UpdatePendingRestart;
@@ -53,12 +53,13 @@ internal static class AppUpdates
         catch (Exception ex)
         {
             // An offline check or a failed update must leave the calculator usable.
+            updateFailed = true;
             Trace.WriteLine($"App update failed: {ex.Message}");
         }
         finally
         {
             if (!form.IsDisposed)
-                form.Text = title;
+                form.Text = updateFailed ? $"{title} — update unavailable" : title;
         }
     }
 
