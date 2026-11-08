@@ -7,7 +7,7 @@ internal sealed class CraftStepTree : TreeView
     private const int UncheckedImage = 0;
     private const int CheckedImage = 1;
 
-    private readonly HashSet<CompletedBatch> completed = [];
+    private readonly Dictionary<Recipe, CompletedBatch> completed = [];
     private readonly TreeNode doneGroup = new() { ToolTipText = "Expand to review or uncheck completed steps." };
     private readonly ImageList checkboxes;
 
@@ -23,50 +23,65 @@ internal sealed class CraftStepTree : TreeView
     }
 
     public event EventHandler? CompletionChanged;
-    public IEnumerable<CompletedBatch> Completed => completed;
+    public IEnumerable<CompletedBatch> Completed => completed.Values;
 
     public void RestoreCompleted(IEnumerable<CompletedBatch> batches)
     {
         completed.Clear();
-        completed.UnionWith(batches);
+        foreach (var batch in batches)
+            completed[batch.Recipe] = batch;
         doneGroup.Collapse();
     }
 
-    public void SetSteps(IReadOnlyList<CraftStep> steps, Func<CraftStep, int, TreeNode> createNode)
+    public void SetSteps(CraftingProgress? progress, Func<CraftStep, int, TreeNode> createNode, bool keepPosition)
     {
         var expandDone = doneGroup.TreeView is not null && doneGroup.IsExpanded;
-        completed.IntersectWith(steps.Select(step => new CompletedBatch(step.Recipe, step.Batches)));
+        var selected = keepPosition ? SelectedNode?.Tag as StepEntry : null;
+        var expanded = keepPosition
+            ? Nodes.Cast<TreeNode>().Concat(doneGroup.Nodes.Cast<TreeNode>())
+                .Where(node => node.Tag is StepEntry)
+                .ToDictionary(node => (((StepEntry)node.Tag!).Progress.Order, ((StepEntry)node.Tag!).Done), node => node.IsExpanded)
+            : [];
 
         BeginUpdate();
         try
         {
             Nodes.Clear();
             doneGroup.Nodes.Clear();
-            for (var index = 0; index < steps.Count; index++)
+            completed.Clear();
+            if (progress is not null)
             {
-                var step = steps[index];
-                var key = new CompletedBatch(step.Recipe, step.Batches);
-                var node = createNode(step, index);
-                node.Tag = new StepEntry(key, index);
-                if (completed.Contains(key))
+                foreach (var pending in progress.Pending)
+                    AddNode(Nodes, pending, isDone: false);
+                foreach (var done in progress.Done)
                 {
-                    node.StateImageIndex = CheckedImage;
-                    doneGroup.Nodes.Add(node);
-                }
-                else
-                {
-                    node.StateImageIndex = UncheckedImage;
-                    Nodes.Add(node);
-                    node.Expand();
+                    completed[done.Step.Recipe] = new CompletedBatch(done.Step.Recipe, done.Step.Batches, done.PlanBatches);
+                    AddNode(doneGroup.Nodes, done, isDone: true);
                 }
             }
             UpdateDoneGroup(expandDone);
-            if (Nodes.Count > 0)
+            if (selected is not null)
+            {
+                var order = selected.Progress.Order;
+                SelectedNode = (selected.Done && expandDone ? ClosestNode(doneGroup.Nodes, order) : null)
+                    ?? ClosestNode(Nodes, order) ?? Nodes.Cast<TreeNode>().FirstOrDefault();
+            }
+            else if (Nodes.Count > 0)
                 TopNode = Nodes[0];
         }
         finally
         {
             EndUpdate();
+        }
+
+        void AddNode(TreeNodeCollection parent, ProgressStep item, bool isDone)
+        {
+            var node = createNode(item.Step, item.Order);
+            node.Tag = new StepEntry(item, isDone);
+            node.StateImageIndex = isDone ? CheckedImage : UncheckedImage;
+            parent.Add(node);
+            if (expanded.GetValueOrDefault((item.Order, isDone), !isDone))
+                node.Expand();
         }
     }
 
@@ -99,30 +114,16 @@ internal sealed class CraftStepTree : TreeView
 
     private void ToggleStep(TreeNode node, StepEntry entry)
     {
-        var wasDone = completed.Remove(entry.Key);
-        if (!wasDone)
-            completed.Add(entry.Key);
-
-        var expandDone = doneGroup.TreeView is not null && doneGroup.IsExpanded;
-        var neighbor = node.NextNode ?? node.PrevNode;
-        BeginUpdate();
-        try
+        var progress = entry.Progress;
+        var recipe = progress.Step.Recipe;
+        if (entry.Done)
+            completed.Remove(recipe);
+        else
         {
-            node.Remove();
-            node.StateImageIndex = wasDone ? UncheckedImage : CheckedImage;
-            InsertInOrder(wasDone ? Nodes : doneGroup.Nodes, node, entry.Order);
-            if (wasDone)
-                node.Expand();
-            else
-                node.Collapse();
-
-            UpdateDoneGroup(expandDone);
-            SelectedNode = neighbor ?? (wasDone ? node : doneGroup);
+            var batches = completed.GetValueOrDefault(recipe)?.Batches ?? 0;
+            completed[recipe] = new CompletedBatch(recipe, checked(batches + progress.Step.Batches), progress.PlanBatches);
         }
-        finally
-        {
-            EndUpdate();
-        }
+        SelectedNode = node;
         CompletionChanged?.Invoke(this, EventArgs.Empty);
     }
 
@@ -143,13 +144,9 @@ internal sealed class CraftStepTree : TreeView
             doneGroup.Collapse();
     }
 
-    private static void InsertInOrder(TreeNodeCollection siblings, TreeNode node, int order)
-    {
-        var index = 0;
-        while (index < siblings.Count && siblings[index].Tag is StepEntry entry && entry.Order < order)
-            index++;
-        siblings.Insert(index, node);
-    }
+    private static TreeNode? ClosestNode(TreeNodeCollection nodes, int order) =>
+        nodes.Cast<TreeNode>().FirstOrDefault(node => node.Tag is StepEntry entry && entry.Progress.Order >= order)
+        ?? nodes.Cast<TreeNode>().LastOrDefault(node => node.Tag is StepEntry);
 
     private static Bitmap DrawCheckbox(CheckBoxState state)
     {
@@ -161,5 +158,5 @@ internal sealed class CraftStepTree : TreeView
         return bitmap;
     }
 
-    private sealed record StepEntry(CompletedBatch Key, int Order);
+    private sealed record StepEntry(ProgressStep Progress, bool Done);
 }

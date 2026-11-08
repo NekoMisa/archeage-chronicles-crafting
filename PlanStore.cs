@@ -19,7 +19,7 @@ internal sealed record SavedTarget(string Item, string Profession, int Level, in
     }
 }
 
-internal sealed record CompletedBatch(Recipe Recipe, long Batches);
+internal sealed record CompletedBatch(Recipe Recipe, long Batches, long? PlanBatches = null);
 internal sealed record GatheredMaterial(long PlanQuantity, long Quantity);
 
 internal sealed class SavedPlan

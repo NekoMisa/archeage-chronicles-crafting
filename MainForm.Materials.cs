@@ -45,7 +45,7 @@ internal sealed partial class MainForm
             }
         }
 
-        afterCrafts = plan?.MaterialsAfterCrafts(steps.Completed) ?? new Dictionary<string, long>();
+        afterCrafts = currentProgress?.Materials ?? new Dictionary<string, long>();
         remainingMaterials = afterCrafts
             .Select(item => (item.Key, Quantity: item.Value - (gathered.GetValueOrDefault(item.Key)?.Quantity ?? 0)))
             .Where(item => item.Quantity > 0)

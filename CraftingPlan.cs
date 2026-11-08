@@ -65,36 +65,66 @@ internal sealed record CraftStep(Recipe Recipe, long Batches, long Needed, long 
     public long Gold => Batches * Recipe.Gold;
 }
 
+internal sealed record ProgressStep(CraftStep Step, int Order, long PlanBatches);
+
+internal sealed record CraftingProgress(IReadOnlyList<ProgressStep> Pending, IReadOnlyList<ProgressStep> Done,
+    IReadOnlyDictionary<string, long> Materials);
+
 internal sealed record CraftingPlan(IReadOnlyList<CraftTarget> Targets, IReadOnlyList<CraftStep> Steps,
     IReadOnlyDictionary<string, long> Materials, IReadOnlyDictionary<string, long> UsedInventory)
 {
     public long Gold => Steps.Sum(step => step.Gold);
 
-    public IReadOnlyDictionary<string, long> MaterialsAfterCrafts(IEnumerable<CompletedBatch> completed)
+    public CraftingProgress AfterCrafts(IEnumerable<CompletedBatch> completed)
     {
-        var done = completed.ToHashSet();
-        if (done.Count == 0)
-            return Materials;
+        var completion = completed.ToDictionary(batch => batch.Recipe);
+        if (completion.Count == 0)
+            return new CraftingProgress(Steps.Select((step, index) => new ProgressStep(step, index, step.Batches)).ToArray(),
+                [], Materials);
 
         var demand = Targets.ToDictionary(target => target.Recipe.Item, target => target.Quantity,
             StringComparer.OrdinalIgnoreCase);
+        var pending = new List<ProgressStep>();
+        var done = new List<ProgressStep>();
         for (var index = Steps.Count - 1; index >= 0; index--)
         {
             var step = Steps[index];
-            if (!demand.Remove(step.Recipe.Item, out var needed)
-                || done.Contains(new CompletedBatch(step.Recipe, step.Batches)))
+            var completedUnits = 0L;
+            if (completion.TryGetValue(step.Recipe, out var marked) && marked.Batches > 0
+                && marked.Batches <= step.Batches && (marked.PlanBatches ?? marked.Batches) == step.Batches)
+            {
+                completedUnits = checked(marked.Batches * step.Recipe.Output);
+                done.Add(new ProgressStep(step with
+                {
+                    Batches = marked.Batches, Needed = Math.Min(completedUnits, step.Needed),
+                    Requested = Math.Min(completedUnits, step.Requested)
+                }, index, step.Batches));
+            }
+
+            if (!demand.Remove(step.Recipe.Item, out var needed))
                 continue;
 
             // Stock allocated in the original plan may already have gone into completed crafts.
-            var batches = CraftingPlanner.BatchesFor(Math.Min(needed, step.Needed), step.Recipe.Output);
+            var remaining = Math.Min(needed, step.Needed) - completedUnits;
+            if (remaining <= 0)
+                continue;
+
+            var batches = CraftingPlanner.BatchesFor(remaining, step.Recipe.Output);
+            pending.Add(new ProgressStep(step with
+            {
+                Batches = batches, Needed = remaining, Requested = Math.Max(0, step.Requested - completedUnits)
+            }, index, step.Batches));
             foreach (var (item, amount) in step.Recipe.Materials)
                 demand[item] = checked(demand.GetValueOrDefault(item) + batches * amount);
         }
 
-        return Materials.Select(material =>
+        var remainingMaterials = Materials.Select(material =>
                 (material.Key, Quantity: Math.Min(material.Value, demand.GetValueOrDefault(material.Key))))
             .Where(material => material.Quantity > 0)
             .ToDictionary(material => material.Key, material => material.Quantity, StringComparer.OrdinalIgnoreCase);
+        pending.Reverse();
+        done.Reverse();
+        return new CraftingProgress(pending, done, remainingMaterials);
     }
 }
 

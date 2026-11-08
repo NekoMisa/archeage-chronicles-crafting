@@ -132,9 +132,9 @@ internal sealed partial class MainForm
             showingGathered = false;
             steps.RestoreCompleted(plan.Completed
                 .Where(batch => batch is { Recipe: not null, Batches: > 0 })
-                .Select(batch => (Recipe: catalog.FindUnchangedRecipe(batch.Recipe), batch.Batches))
-                .Where(batch => batch.Recipe is not null)
-                .Select(batch => new CompletedBatch(batch.Recipe!, batch.Batches)));
+                .Select(batch => (Batch: batch, Recipe: catalog.FindUnchangedRecipe(batch.Recipe)))
+                .Where(match => match.Recipe is not null)
+                .Select(match => match.Batch with { Recipe = match.Recipe! }));
 
             if (targets.Count == 0 && (plan.Preview?.Resolve(catalog) ?? examplePreview) is { } preview)
             {

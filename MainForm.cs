@@ -53,6 +53,7 @@ internal sealed partial class MainForm : Form
         Text = "No materials left to obtain.", Dock = DockStyle.Fill, Visible = false, ForeColor = Muted
     };
     private CraftingPlan? currentPlan;
+    private CraftingProgress? currentProgress;
 
     public MainForm(RecipeCatalog catalog, PlanStore? planStore = null)
     {
@@ -167,7 +168,7 @@ internal sealed partial class MainForm : Form
         professions.SelectedIndexChanged += (_, _) => PickerChanged();
         steps.CompletionChanged += (_, _) =>
         {
-            RefreshMaterials();
+            RefreshProgress(keepPosition: true);
             SaveActivePlan();
         };
         FormClosing += (_, _) => SaveActivePlan();
@@ -341,8 +342,6 @@ internal sealed partial class MainForm : Form
 
             summary.Text = $"{output}  ·  {plan.Steps.Count:N0} steps  ·  {plan.Gold:N0} gold total";
 
-            steps.SetSteps(plan.Steps, CreateStepNode);
-
             currentPlan = plan;
             copy.Enabled = true;
         }
@@ -356,10 +355,15 @@ internal sealed partial class MainForm : Form
         }
         finally
         {
-            if (currentPlan is null)
-                steps.SetSteps([], CreateStepNode);
-            RefreshMaterials();
+            RefreshProgress();
         }
+    }
+
+    private void RefreshProgress(bool keepPosition = false)
+    {
+        currentProgress = currentPlan?.AfterCrafts(steps.Completed);
+        steps.SetSteps(currentProgress, CreateStepNode, keepPosition);
+        RefreshMaterials();
     }
 
     private static TreeNode CreateStepNode(CraftStep step, int index)
@@ -418,7 +422,7 @@ internal sealed partial class MainForm : Form
 
     private void CopyPlan()
     {
-        if (currentPlan is not { } plan)
+        if (currentPlan is not { } plan || currentProgress is not { } progress)
             return;
 
         var text = new StringBuilder().AppendLine("ArcheAge Chronicles Crafting")
@@ -437,11 +441,11 @@ internal sealed partial class MainForm : Form
                 text.AppendLine($"  {item} ×{amount:N0}");
         }
 
-        text.AppendLine().AppendLine("Craft in this order");
-        for (var index = 0; index < plan.Steps.Count; index++)
+        text.AppendLine().AppendLine("Remaining crafting steps");
+        foreach (var pending in progress.Pending)
         {
-            var step = plan.Steps[index];
-            text.AppendLine(StepTitle(step, index)).AppendLine($"  {StepDetails(step)}");
+            var step = pending.Step;
+            text.AppendLine(StepTitle(step, pending.Order)).AppendLine($"  {StepDetails(step)}");
             if (StepOutputNote(step) is { } note)
                 text.AppendLine($"  {note}");
             foreach (var (item, amount) in step.Recipe.Materials)
