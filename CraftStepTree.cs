@@ -24,7 +24,7 @@ internal sealed class CraftStepTree : TreeView
 
     public void SetSteps(IReadOnlyList<CraftStep> steps, Func<CraftStep, int, TreeNode> createNode)
     {
-        var expandDone = doneGroup.IsExpanded;
+        var expandDone = doneGroup.TreeView is not null && doneGroup.IsExpanded;
         completed.IntersectWith(steps.Select(step => new StepKey(step.Recipe, step.Batches)));
 
         BeginUpdate();
@@ -93,7 +93,7 @@ internal sealed class CraftStepTree : TreeView
         if (!wasDone)
             completed.Add(entry.Key);
 
-        var expandDone = doneGroup.IsExpanded;
+        var expandDone = doneGroup.TreeView is not null && doneGroup.IsExpanded;
         var neighbor = node.NextNode ?? node.PrevNode;
         BeginUpdate();
         try
