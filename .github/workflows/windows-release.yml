@@ -1,0 +1,47 @@
+name: Windows release
+
+on:
+  push:
+    tags:
+      - 'v*'
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    runs-on: windows-2025
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          persist-credentials: false
+      - uses: actions/setup-dotnet@v5
+        with:
+          dotnet-version: |
+            8.0.x
+            10.0.x
+
+      - name: Build installer and update feed
+        shell: pwsh
+        run: |
+          $PSNativeCommandUseErrorActionPreference = $true
+          if ($env:GITHUB_REF_NAME -notmatch '^v[0-9]+\.[0-9]+\.[0-9]+$') {
+            throw 'Release tags must use vMAJOR.MINOR.PATCH.'
+          }
+          $version = $env:GITHUB_REF_NAME.Substring(1)
+          $publishDir = Join-Path $env:RUNNER_TEMP 'crafting-publish'
+          $releaseDir = Join-Path $env:RUNNER_TEMP 'crafting-release'
+          $toolDir = Join-Path $env:RUNNER_TEMP 'vpk'
+
+          dotnet publish CraftingCalculator.csproj -c Release -r win-x64 --self-contained true -o $publishDir "-p:Version=$version" "-p:ReleaseRepository=$env:GITHUB_REPOSITORY"
+          dotnet tool install vpk --version 1.2.161 --tool-path $toolDir
+          & (Join-Path $toolDir 'vpk.exe') pack --packId ArcheAgeChroniclesCrafting --packTitle 'ArcheAge Chronicles Crafting' --packVersion $version --packDir $publishDir --mainExe CraftingCalculator.exe --outputDir $releaseDir
+
+      - name: Publish to GitHub Releases
+        shell: pwsh
+        env:
+          VPK_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          $releaseDir = Join-Path $env:RUNNER_TEMP 'crafting-release'
+          $vpk = Join-Path $env:RUNNER_TEMP 'vpk/vpk.exe'
+          & $vpk upload github --repoUrl "$env:GITHUB_SERVER_URL/$env:GITHUB_REPOSITORY" --outputDir $releaseDir --tag $env:GITHUB_REF_NAME --targetCommitish $env:GITHUB_SHA --releaseName "ArcheAge Chronicles Crafting $env:GITHUB_REF_NAME" --publish
