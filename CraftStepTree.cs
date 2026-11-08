@@ -7,7 +7,7 @@ internal sealed class CraftStepTree : TreeView
     private const int UncheckedImage = 0;
     private const int CheckedImage = 1;
 
-    private readonly HashSet<StepKey> completed = [];
+    private readonly HashSet<CompletedBatch> completed = [];
     private readonly TreeNode doneGroup = new() { ToolTipText = "Expand to review or uncheck completed steps." };
     private readonly ImageList checkboxes;
 
@@ -22,10 +22,20 @@ internal sealed class CraftStepTree : TreeView
         StateImageList = checkboxes;
     }
 
+    public event EventHandler? CompletionChanged;
+    public IEnumerable<CompletedBatch> Completed => completed;
+
+    public void RestoreCompleted(IEnumerable<CompletedBatch> batches)
+    {
+        completed.Clear();
+        completed.UnionWith(batches);
+        doneGroup.Collapse();
+    }
+
     public void SetSteps(IReadOnlyList<CraftStep> steps, Func<CraftStep, int, TreeNode> createNode)
     {
         var expandDone = doneGroup.TreeView is not null && doneGroup.IsExpanded;
-        completed.IntersectWith(steps.Select(step => new StepKey(step.Recipe, step.Batches)));
+        completed.IntersectWith(steps.Select(step => new CompletedBatch(step.Recipe, step.Batches)));
 
         BeginUpdate();
         try
@@ -35,7 +45,7 @@ internal sealed class CraftStepTree : TreeView
             for (var index = 0; index < steps.Count; index++)
             {
                 var step = steps[index];
-                var key = new StepKey(step.Recipe, step.Batches);
+                var key = new CompletedBatch(step.Recipe, step.Batches);
                 var node = createNode(step, index);
                 node.Tag = new StepEntry(key, index);
                 if (completed.Contains(key))
@@ -113,6 +123,7 @@ internal sealed class CraftStepTree : TreeView
         {
             EndUpdate();
         }
+        CompletionChanged?.Invoke(this, EventArgs.Empty);
     }
 
     private void UpdateDoneGroup(bool expand)
@@ -150,6 +161,5 @@ internal sealed class CraftStepTree : TreeView
         return bitmap;
     }
 
-    private readonly record struct StepKey(Recipe Recipe, long Batches);
-    private sealed record StepEntry(StepKey Key, int Order);
+    private sealed record StepEntry(CompletedBatch Key, int Order);
 }

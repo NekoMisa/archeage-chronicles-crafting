@@ -13,7 +13,8 @@ internal static class Program
         {
             var catalog = RecipeCatalog.Load(Path.Combine(AppContext.BaseDirectory, "recipes.json"));
             using var icon = Icon.ExtractAssociatedIcon(Application.ExecutablePath);
-            using var form = new MainForm(catalog) { Icon = icon };
+            var plans = new PlanStore(Path.Combine(PlanStore.DataDirectory, "plans.json"));
+            using var form = new MainForm(catalog, plans) { Icon = icon };
             AppUpdates.Enable(form, catalog);
             Application.Run(form);
         }

@@ -37,12 +37,27 @@ internal sealed class RecipeCatalog
 
     public Recipe? DefaultRecipe(string item) => byItem.GetValueOrDefault(item)?.FirstOrDefault();
 
+    public Recipe? FindUnchangedRecipe(Recipe saved)
+    {
+        if (string.IsNullOrWhiteSpace(saved.Item) || saved.Materials is null)
+            return null;
+
+        return byItem.GetValueOrDefault(saved.Item)?.FirstOrDefault(recipe =>
+            recipe.Profession == saved.Profession && recipe.Level == saved.Level && recipe.Output == saved.Output
+            && recipe.Gold == saved.Gold && recipe.Materials.Count == saved.Materials.Count
+            && recipe.Materials.All(material => saved.Materials.TryGetValue(material.Key, out var count)
+                && count == material.Value));
+    }
+
     public static RecipeCatalog Load(string path) =>
         new(JsonSerializer.Deserialize<Recipe[]>(File.ReadAllText(path), JsonSerializerOptions.Web)
             ?? throw new InvalidDataException("Expected a list of recipes."));
 }
 
-internal sealed record CraftTarget(Recipe Recipe, long Quantity);
+internal sealed record CraftTarget(Recipe Recipe, long Quantity)
+{
+    public const long MaximumQuantity = 999_999;
+}
 
 internal sealed record CraftStep(Recipe Recipe, long Batches, long Needed, long Requested)
 {
@@ -51,16 +66,17 @@ internal sealed record CraftStep(Recipe Recipe, long Batches, long Needed, long 
 }
 
 internal sealed record CraftingPlan(IReadOnlyList<CraftTarget> Targets, IReadOnlyList<CraftStep> Steps,
-    IReadOnlyDictionary<string, long> Materials)
+    IReadOnlyDictionary<string, long> Materials, IReadOnlyDictionary<string, long> UsedInventory)
 {
     public long Gold => Steps.Sum(step => step.Gold);
 }
 
 internal sealed class CraftingPlanner(RecipeCatalog catalog)
 {
-    public CraftingPlan Calculate(Recipe target, long quantity) => Calculate([new CraftTarget(target, quantity)]);
+    public CraftingPlan Calculate(Recipe target, long quantity, IReadOnlyDictionary<string, long>? inventory = null) =>
+        Calculate([new CraftTarget(target, quantity)], inventory);
 
-    public CraftingPlan Calculate(IEnumerable<CraftTarget> targets)
+    public CraftingPlan Calculate(IEnumerable<CraftTarget> targets, IReadOnlyDictionary<string, long>? inventory = null)
     {
         var requested = new Dictionary<string, CraftTarget>(StringComparer.OrdinalIgnoreCase);
         foreach (var target in targets)
@@ -88,31 +104,53 @@ internal sealed class CraftingPlanner(RecipeCatalog catalog)
 
         var demand = requested.ToDictionary(entry => entry.Key, entry => entry.Value.Quantity,
             StringComparer.OrdinalIgnoreCase);
+        var usedInventory = new Dictionary<string, long>(StringComparer.OrdinalIgnoreCase);
         var steps = new List<CraftStep>();
 
         // Process consumers before their ingredients so shared demand is summed before rounding.
         for (var index = craftOrder.Count - 1; index >= 0; index--)
         {
             var recipe = craftOrder[index];
-            var needed = demand[recipe.Item];
-            demand.Remove(recipe.Item);
-            var batches = Math.DivRem(needed, recipe.Output, out var remainder);
+            if (!demand.Remove(recipe.Item, out var needed))
+                continue;
+
+            var reserved = requested.GetValueOrDefault(recipe.Item)?.Quantity ?? 0;
+            var neededFromCrafting = Math.Max(reserved, needed - OnHand(recipe.Item));
+            var batches = Math.DivRem(neededFromCrafting, recipe.Output, out var remainder);
             if (remainder > 0)
                 batches++;
 
+            // A batch's surplus can cover ingredients before any stock is used.
+            var fromStock = Math.Max(0, needed - checked(batches * recipe.Output));
+            if (fromStock > 0)
+                usedInventory.Add(recipe.Item, fromStock);
+            if (batches == 0)
+                continue;
+
             checked
             {
-                _ = batches * recipe.Output;
                 _ = batches * recipe.Gold;
                 foreach (var (item, amount) in recipe.Materials)
                     demand[item] = demand.GetValueOrDefault(item) + batches * amount;
             }
 
-            steps.Add(new CraftStep(recipe, batches, needed, requested.GetValueOrDefault(recipe.Item)?.Quantity ?? 0));
+            steps.Add(new CraftStep(recipe, batches, needed - fromStock, reserved));
+        }
+
+        var remaining = new Dictionary<string, long>(StringComparer.OrdinalIgnoreCase);
+        foreach (var (item, needed) in demand)
+        {
+            var fromStock = Math.Min(needed, OnHand(item));
+            if (fromStock > 0)
+                usedInventory.Add(item, fromStock);
+            if (needed > fromStock)
+                remaining.Add(item, needed - fromStock);
         }
 
         steps.Reverse();
-        return new CraftingPlan(requested.Values.ToArray(), steps, demand);
+        return new CraftingPlan(requested.Values.ToArray(), steps, remaining, usedInventory);
+
+        long OnHand(string item) => Math.Max(0, inventory?.GetValueOrDefault(item) ?? 0);
 
         void Visit(Recipe recipe)
         {

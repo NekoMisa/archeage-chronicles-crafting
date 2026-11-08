@@ -4,7 +4,7 @@ using System.Text;
 
 namespace CraftingCalculator;
 
-internal sealed class MainForm : Form
+internal sealed partial class MainForm : Form
 {
     private static readonly Color Ink = Color.FromArgb(26, 44, 56);
     private static readonly Color Muted = Color.FromArgb(75, 94, 102);
@@ -48,10 +48,17 @@ internal sealed class MainForm : Form
         HeaderStyle = ColumnHeaderStyle.Nonclickable, FullRowSelect = true, GridLines = true,
         MultiSelect = false, AccessibleName = "Total materials to obtain", ShowItemToolTips = true
     };
+    private readonly Label emptyMaterials = new()
+    {
+        Text = "All materials are on hand.", Dock = DockStyle.Fill, Visible = false, ForeColor = Muted
+    };
     private CraftingPlan? currentPlan;
 
-    public MainForm(RecipeCatalog catalog)
+    public MainForm(RecipeCatalog catalog, PlanStore? planStore = null)
     {
+        this.catalog = catalog;
+        this.planStore = planStore;
+        planBook = LoadPlans();
         planner = new CraftingPlanner(catalog);
         Text = "ArcheAge Chronicles Crafting";
         Font = new Font("Segoe UI", 10);
@@ -59,8 +66,8 @@ internal sealed class MainForm : Form
         BackColor = Canvas;
         ForeColor = Ink;
         StartPosition = FormStartPosition.CenterScreen;
-        ClientSize = new Size(1040, 760);
-        MinimumSize = new Size(840, 700);
+        ClientSize = new Size(1040, 800);
+        MinimumSize = new Size(840, 730);
 
         var layout = new TableLayoutPanel
         {
@@ -75,14 +82,16 @@ internal sealed class MainForm : Form
         var workspace = new TableLayoutPanel
         {
             Dock = DockStyle.Fill, Padding = new Padding(20, 14, 20, 4), Margin = Padding.Empty,
-            ColumnCount = 1, RowCount = 4
+            ColumnCount = 1, RowCount = 5
         };
         workspace.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100));
+        workspace.RowStyles.Add(new RowStyle(SizeType.Absolute, 40));
         workspace.RowStyles.Add(new RowStyle(SizeType.Absolute, 122));
         workspace.RowStyles.Add(new RowStyle(SizeType.Absolute, 46));
         workspace.RowStyles.Add(new RowStyle(SizeType.Percent, 100));
         workspace.RowStyles.Add(new RowStyle(SizeType.Absolute, 31));
         layout.Controls.Add(workspace, 0, 1);
+        workspace.Controls.Add(CreatePlanBar(), 0, 0);
 
         foreach (var group in catalog.Recipes.GroupBy(recipe => recipe.Profession).OrderBy(group => group.Key))
         {
@@ -93,22 +102,24 @@ internal sealed class MainForm : Form
             professions.TabPages.Add(tab);
         }
         professions.AccessibleName = "Crafting professions";
-        workspace.Controls.Add(professions, 0, 0);
+        workspace.Controls.Add(professions, 0, 1);
         var firstTab = pickers.Keys.FirstOrDefault(page => page.Text == "Engineering") ?? professions.TabPages[0];
         pickers[firstTab].SelectItem("Flugel's Refined Glider");
         professions.SelectedTab = firstTab;
+        if (pickers[firstTab].SelectedRecipe is { } example)
+            examplePreview = new CraftTarget(example, 1);
 
         var summaryBar = new Panel { Dock = DockStyle.Fill, Padding = new Padding(0, 6, 0, 6) };
         summaryBar.Controls.Add(summary);
         summaryBar.Controls.Add(new Label
         {
-            Text = "Double-click a material for sources", ForeColor = Muted,
+            Text = "Double-click for sources", ForeColor = Muted,
             Dock = DockStyle.Right, Width = 264, TextAlign = ContentAlignment.MiddleRight,
             Padding = new Padding(0, 0, 12, 0)
         });
         summaryBar.Controls.Add(copy);
         copy.Click += (_, _) => CopyPlan();
-        workspace.Controls.Add(summaryBar, 0, 1);
+        workspace.Controls.Add(summaryBar, 0, 2);
 
         var results = new TableLayoutPanel { Dock = DockStyle.Fill, ColumnCount = 2, RowCount = 1 };
         results.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 63));
@@ -123,9 +134,12 @@ internal sealed class MainForm : Form
         lists.RowStyles.Add(new RowStyle(SizeType.Percent, 48));
         lists.RowStyles.Add(new RowStyle(SizeType.Percent, 52));
         lists.Controls.Add(CreateSection("Craft list", CreateCraftList()), 0, 0);
-        lists.Controls.Add(CreateSection("Materials to obtain", materials), 0, 1);
+        var materialPanel = new Panel { Dock = DockStyle.Fill };
+        materialPanel.Controls.Add(materials);
+        materialPanel.Controls.Add(emptyMaterials);
+        lists.Controls.Add(CreateSection("Materials to obtain", materialPanel), 0, 1);
         results.Controls.Add(lists, 1, 0);
-        workspace.Controls.Add(results, 0, 2);
+        workspace.Controls.Add(results, 0, 3);
 
         SetQuantityColumns(materials, "Material");
         materials.ItemActivate += (_, _) => OpenMaterialSource(materials.FocusedItem?.Tag);
@@ -148,7 +162,7 @@ internal sealed class MainForm : Form
         source.LinkClicked += (_, _) => OpenWebPage(SourceUrl);
         footer.Controls.Add(source);
         footer.Controls.Add(new Label { Text = $"·  {BatchRule}", ForeColor = Muted, AutoSize = true });
-        workspace.Controls.Add(footer, 0, 3);
+        workspace.Controls.Add(footer, 0, 4);
 
         foreach (var picker in pickers.Values)
         {
@@ -156,7 +170,9 @@ internal sealed class MainForm : Form
             picker.ListRequested += (_, _) => AddOrUpdateTarget(picker);
         }
         professions.SelectedIndexChanged += (_, _) => PickerChanged();
-        PickerChanged();
+        steps.CompletionChanged += (_, _) => SaveActivePlan();
+        FormClosing += (_, _) => SaveActivePlan();
+        ActivatePlan(ActivePlan);
     }
 
     private static Control CreateHeader()
@@ -202,6 +218,7 @@ internal sealed class MainForm : Form
                 return;
             targets.Remove(target.Recipe.Item);
             RefreshCraftList();
+            SaveActivePlan();
         };
 
         var actions = new FlowLayoutPanel
@@ -227,20 +244,14 @@ internal sealed class MainForm : Form
 
     private RecipePicker ActivePicker => pickers[professions.SelectedTab!];
 
-    internal IEnumerable<CraftTarget> QueuedTargets => targets.Values;
-
-    internal void RestoreCraftList(IEnumerable<CraftTarget> savedTargets)
-    {
-        foreach (var target in savedTargets)
-            targets[target.Recipe.Item] = target;
-        RefreshCraftList();
-    }
-
     private CraftTarget? SelectedTarget => craftList.SelectedItems.Count == 1
         ? (CraftTarget?)craftList.SelectedItems[0].Tag : null;
 
     private void PickerChanged()
     {
+        if (loadingPlan)
+            return;
+
         UpdateListAction();
         if (targets.Count == 0)
             RefreshPlan();
@@ -261,6 +272,7 @@ internal sealed class MainForm : Form
             return;
         targets[recipe.Item] = new CraftTarget(recipe, picker.Quantity);
         RefreshCraftList(recipe.Item);
+        SaveActivePlan();
     }
 
     private void EditSelectedTarget()
@@ -311,17 +323,19 @@ internal sealed class MainForm : Form
         {
             currentPlan = null;
             copy.Enabled = false;
+            emptyMaterials.Visible = false;
+            materials.Visible = true;
             materials.Items.Clear();
             CraftingPlan plan;
             string output;
             if (targets.Count > 0)
             {
-                plan = planner.Calculate(targets.Values);
+                plan = planner.Calculate(targets.Values, inventory);
                 output = targets.Count == 1 ? "1 item in list" : $"{targets.Count:N0} items in list";
             }
             else if (professions.SelectedTab is not null && ActivePicker.SelectedRecipe is { } recipe)
             {
-                plan = planner.Calculate(recipe, ActivePicker.Quantity);
+                plan = planner.Calculate(recipe, ActivePicker.Quantity, inventory);
                 output = $"{plan.Steps[^1].Produced:N0} made";
             }
             else
@@ -336,14 +350,20 @@ internal sealed class MainForm : Form
 
             foreach (var (item, amount) in plan.Materials.OrderBy(material => material.Key))
             {
+                var used = plan.UsedInventory.GetValueOrDefault(item);
+                var tooltip = MaterialToolTip(item);
+                if (used > 0)
+                    tooltip += $"\nUsing {used:N0} from inventory.";
                 var row = new ListViewItem([item, amount.ToString("N0")])
                 {
-                    Tag = item, ToolTipText = MaterialToolTip(item), UseItemStyleForSubItems = false
+                    Tag = item, ToolTipText = tooltip, UseItemStyleForSubItems = false
                 };
                 row.SubItems[0].ForeColor = Teal;
                 materials.Items.Add(row);
             }
 
+            materials.Visible = plan.Materials.Count > 0;
+            emptyMaterials.Visible = plan.Materials.Count == 0;
             currentPlan = plan;
             copy.Enabled = true;
         }
@@ -423,13 +443,20 @@ internal sealed class MainForm : Form
             return;
 
         var text = new StringBuilder().AppendLine("ArcheAge Chronicles Crafting")
-            .AppendLine(summary.Text).AppendLine().AppendLine("Items requested");
+            .AppendLine(ActivePlan.Name).AppendLine(summary.Text).AppendLine().AppendLine("Items requested");
         foreach (var target in plan.Targets)
             text.AppendLine($"  {target.Recipe.Item} ×{target.Quantity:N0} ({target.Recipe.Profession} Lv {target.Recipe.Level})");
 
         text.AppendLine().AppendLine("Materials to obtain");
         foreach (var (item, amount) in plan.Materials.OrderBy(material => material.Key))
             text.AppendLine($"  {item} ×{amount:N0}");
+
+        if (plan.UsedInventory.Count > 0)
+        {
+            text.AppendLine().AppendLine("Use from inventory");
+            foreach (var (item, amount) in plan.UsedInventory.OrderBy(material => material.Key))
+                text.AppendLine($"  {item} ×{amount:N0}");
+        }
 
         text.AppendLine().AppendLine("Craft in this order");
         for (var index = 0; index < plan.Steps.Count; index++)
@@ -457,12 +484,10 @@ internal sealed class MainForm : Form
 
 internal sealed class RecipePicker : TableLayoutPanel
 {
-    internal const long MaximumQuantity = 999_999;
-
     private readonly TextBox search = new() { PlaceholderText = "Filter items…" };
     private readonly ComboBox items = new() { DropDownStyle = ComboBoxStyle.DropDownList, MaxDropDownItems = 16 };
     private readonly ComboBox variants = new() { DropDownStyle = ComboBoxStyle.DropDownList };
-    private readonly NumericUpDown quantity = new() { Minimum = 1, Maximum = MaximumQuantity, ThousandsSeparator = true, Value = 1 };
+    private readonly NumericUpDown quantity = new() { Minimum = 1, Maximum = CraftTarget.MaximumQuantity, ThousandsSeparator = true, Value = 1 };
     private readonly Button listAction = new() { Text = "Add to list", Dock = DockStyle.Top, Height = 30 };
     private readonly RecipeGroup[] groups;
     private bool loading;
@@ -524,14 +549,17 @@ internal sealed class RecipePicker : TableLayoutPanel
         listAction.Text = isListed ? "Update item" : "Add to list";
     }
 
-    public void EditTarget(CraftTarget target)
+    public void EditTarget(CraftTarget target, bool focusQuantity = true)
     {
         search.Clear();
         SelectItem(target.Recipe.Item);
         variants.SelectedItem = variants.Items.OfType<Variant>().First(variant => variant.Recipe == target.Recipe);
         quantity.Value = target.Quantity;
-        quantity.Focus();
-        quantity.Select(0, quantity.Text.Length);
+        if (focusQuantity)
+        {
+            quantity.Focus();
+            quantity.Select(0, quantity.Text.Length);
+        }
     }
 
     private void AddField(string label, Control control, int column)
