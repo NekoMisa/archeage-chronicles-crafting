@@ -1,6 +1,6 @@
 # ArcheAge Chronicles Crafting Calculator
 
-A Windows Forms calculator for planning crafts from raw materials through the finished items.
+A Windows Forms calculator for planning crafts and comparing trade routes.
 
 ## Install
 
@@ -35,6 +35,14 @@ Open **Inventory…** and enter how many materials or intermediate items you hav
 Checking off a craft updates **Materials to obtain** for the unfinished work. Check a material there to mark the displayed quantity as gathered. Open **Gathered** and uncheck it to undo. Gathered marks save with the plan and reset for an item when an edit changes its original shopping quantity.
 
 Double-click a material in the shopping list or under a crafting step to open its source page in your browser. You can also select the material and press **Enter**. The linked pages show gathering locations, vendors, enemy drops, or recipes depending on the item. Materials added to your catalog without a direct link open a search for the item name.
+
+## Trading
+
+Open the **Trading** tab beside **Crafting**. Use **Get a material** to choose a reward and the quantity you need. Use **Trade what I have** to choose a packing ingredient or an already-packed good and enter how many you own. Select a result to see the trading posts, packing materials, fees, and payouts for each step. Turn off **Include two-trade routes** to see only direct runs.
+
+The helper rounds up to whole packs for a requested reward and uses whole packs within the quantity you own in the other view. Gold payouts are ranked after known packing fees. Item payouts are ranked within each reward. Packing inputs other than the item you enter still need to be supplied. Material prices, travel times, and trading permits are separate from the route comparison.
+
+`trade-routes.json` bundles 54 Early Access trade goods and 270 routes as of November 9, 2026. Each result links to its source, including goods whose packing recipe is unavailable in the route table. [RaidDex trade routes](https://raiddex.com/en/archeage-chronicles/trade-routes)
 
 ## Recipe data
 

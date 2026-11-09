@@ -5,12 +5,13 @@
     <UseWindowsForms>true</UseWindowsForms>
     <ImplicitUsings>enable</ImplicitUsings>
     <Nullable>enable</Nullable>
-    <Version>0.2.3</Version>
+    <Version>0.3.0</Version>
     <ApplicationIcon>assets/forge.ico</ApplicationIcon>
     <ReleaseRepository Condition="'$(ReleaseRepository)' == ''">NekoMisa/archeage-chronicles-crafting</ReleaseRepository>
   </PropertyGroup>
   <ItemGroup>
     <None Update="recipes.json" CopyToOutputDirectory="PreserveNewest" CopyToPublishDirectory="PreserveNewest" />
+    <None Update="trade-routes.json" CopyToOutputDirectory="PreserveNewest" CopyToPublishDirectory="PreserveNewest" />
     <AssemblyMetadata Include="ReleaseRepository" Value="$(ReleaseRepository)" />
     <PackageReference Include="Velopack" Version="1.2.161" />
   </ItemGroup>

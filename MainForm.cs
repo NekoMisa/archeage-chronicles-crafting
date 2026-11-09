@@ -80,18 +80,47 @@ internal sealed partial class MainForm : Form
         Controls.Add(layout);
         layout.Controls.Add(CreateHeader(), 0, 0);
 
+        var views = new TabControl
+        {
+            Dock = DockStyle.Fill, SizeMode = TabSizeMode.Fixed, ItemSize = new Size(154, 38),
+            DrawMode = TabDrawMode.OwnerDrawFixed, AccessibleName = "Crafting and trading"
+        };
+        var craftingTab = new TabPage("Crafting") { BackColor = Canvas };
+        var tradingTab = new TabPage("Trading") { BackColor = Canvas };
+        views.TabPages.AddRange([craftingTab, tradingTab]);
+        views.DrawItem += (_, e) =>
+        {
+            var selected = e.Index == views.SelectedIndex;
+            using var background = new SolidBrush(selected ? Teal : Canvas);
+            e.Graphics.FillRectangle(background, e.Bounds);
+            TextRenderer.DrawText(e.Graphics, views.TabPages[e.Index].Text, views.Font, e.Bounds,
+                selected ? Color.White : Ink, TextFormatFlags.HorizontalCenter | TextFormatFlags.VerticalCenter);
+            if (views.Focused && selected)
+                e.DrawFocusRectangle();
+        };
+        var tradingLoaded = false;
+        views.SelectedIndexChanged += (_, _) =>
+        {
+            if (views.SelectedTab != tradingTab || tradingLoaded)
+                return;
+
+            tradingLoaded = true;
+            tradingTab.Controls.Add(CreateTradeWorkspace());
+        };
+        layout.Controls.Add(views, 0, 1);
+
         var workspace = new TableLayoutPanel
         {
-            Dock = DockStyle.Fill, Padding = new Padding(20, 14, 20, 4), Margin = Padding.Empty,
+            Dock = DockStyle.Fill, Padding = new Padding(20, 10, 20, 4), Margin = Padding.Empty,
             ColumnCount = 1, RowCount = 5
         };
         workspace.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100));
-        workspace.RowStyles.Add(new RowStyle(SizeType.Absolute, 40));
-        workspace.RowStyles.Add(new RowStyle(SizeType.Absolute, 122));
+        workspace.RowStyles.Add(new RowStyle(SizeType.Absolute, 38));
+        workspace.RowStyles.Add(new RowStyle(SizeType.Absolute, 116));
         workspace.RowStyles.Add(new RowStyle(SizeType.Absolute, 46));
         workspace.RowStyles.Add(new RowStyle(SizeType.Percent, 100));
         workspace.RowStyles.Add(new RowStyle(SizeType.Absolute, 31));
-        layout.Controls.Add(workspace, 0, 1);
+        craftingTab.Controls.Add(workspace);
         workspace.Controls.Add(CreatePlanBar(), 0, 0);
 
         foreach (var group in catalog.Recipes.GroupBy(recipe => recipe.Profession).OrderBy(group => group.Key))
@@ -173,6 +202,24 @@ internal sealed partial class MainForm : Form
         };
         FormClosing += (_, _) => SaveActivePlan();
         ActivatePlan(ActivePlan);
+    }
+
+    private Control CreateTradeWorkspace()
+    {
+        try
+        {
+            var trades = TradeCatalog.Load(Path.Combine(AppContext.BaseDirectory, "trade-routes.json"));
+            return new TradeWorkspace(trades, OpenWebPage, Ink, Muted, Teal);
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException
+            or System.Text.Json.JsonException or InvalidDataException)
+        {
+            return new Label
+            {
+                Dock = DockStyle.Fill, Padding = new Padding(20),
+                Text = $"Could not load trade-routes.json.\n\n{ex.Message}"
+            };
+        }
     }
 
     private static Control CreateHeader()
