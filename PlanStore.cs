@@ -12,9 +12,10 @@ internal sealed record SavedTarget(string Item, string Profession, int Level, in
         if (string.IsNullOrWhiteSpace(Item) || Quantity is < 1 or > CraftTarget.MaximumQuantity)
             return null;
 
+        var item = catalog.DefaultRecipe(Item)?.Item ?? RecipeCatalog.UpdatedItemName(Item);
         var recipe = catalog.Recipes.FirstOrDefault(candidate =>
-            candidate.Item == Item && candidate.Profession == Profession
-            && candidate.Level == Level && candidate.Output == Output) ?? catalog.DefaultRecipe(Item);
+            candidate.Item == item && candidate.Profession == Profession
+            && candidate.Level == Level && candidate.Output == Output) ?? catalog.DefaultRecipe(item);
         return recipe is null ? null : new CraftTarget(recipe, Quantity);
     }
 }

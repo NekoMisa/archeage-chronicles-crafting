@@ -37,12 +37,23 @@ internal sealed class RecipeCatalog
 
     public Recipe? DefaultRecipe(string item) => byItem.GetValueOrDefault(item)?.FirstOrDefault();
 
+    internal static string UpdatedItemName(string item) => item switch
+    {
+        "Garden's Mirage Shoes" => "Garden's Mirage Slippers",
+        "Golden Tree Warden's Hat" => "Golden Tree Warden's Hood",
+        "Rift Defender's Longbow" => "Rift Defender's Crossbow",
+        "Bellflower Dewdrop" => "Evening Dewdrop",
+        "Wind Blade Claw" => "Wind Blade Claws",
+        _ => item
+    };
+
     public Recipe? FindUnchangedRecipe(Recipe saved)
     {
         if (string.IsNullOrWhiteSpace(saved.Item) || saved.Materials is null)
             return null;
 
-        return byItem.GetValueOrDefault(saved.Item)?.FirstOrDefault(recipe =>
+        var variants = byItem.GetValueOrDefault(saved.Item) ?? byItem.GetValueOrDefault(UpdatedItemName(saved.Item));
+        return variants?.FirstOrDefault(recipe =>
             recipe.Profession == saved.Profession && recipe.Level == saved.Level && recipe.Output == saved.Output
             && recipe.Gold == saved.Gold && recipe.Materials.Count == saved.Materials.Count
             && recipe.Materials.All(material => saved.Materials.TryGetValue(material.Key, out var count)

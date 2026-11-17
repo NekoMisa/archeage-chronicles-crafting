@@ -121,13 +121,16 @@ internal sealed partial class MainForm
             foreach (var (item, amount) in plan.Inventory)
             {
                 if (!string.IsNullOrWhiteSpace(item) && amount > 0)
-                    inventory[item] = amount;
+                {
+                    var name = RecipeCatalog.UpdatedItemName(item);
+                    inventory[name] = Math.Max(inventory.GetValueOrDefault(name), amount);
+                }
             }
             gathered.Clear();
             foreach (var (item, mark) in plan.Gathered)
             {
                 if (!string.IsNullOrWhiteSpace(item) && mark is { Quantity: > 0 } && mark.Quantity <= mark.PlanQuantity)
-                    gathered[item] = mark;
+                    gathered[RecipeCatalog.UpdatedItemName(item)] = mark;
             }
             showingGathered = false;
             steps.RestoreCompleted(plan.Completed

@@ -10,7 +10,8 @@ internal sealed partial class MainForm : Form
     private static readonly Color Muted = Color.FromArgb(75, 94, 102);
     private static readonly Color Teal = Color.FromArgb(20, 98, 91);
     private static readonly Color Canvas = Color.FromArgb(239, 244, 243);
-    private const string SourceUrl = "https://archeagecentral.com/crafting";
+    private const string SourceUrl = "https://raiddex.com/en/archeage-chronicles/crafting";
+    private const string RecipeSnapshot = "November 17, 2026 recipe data";
     private const string BatchRule = "Unlisted ingredients use their lowest-level recipe.";
 
     private readonly CraftingPlanner planner;
@@ -183,7 +184,7 @@ internal sealed partial class MainForm : Form
         };
 
         var footer = new FlowLayoutPanel { Dock = DockStyle.Fill, WrapContents = false, Padding = new Padding(0, 4, 0, 0) };
-        var source = new LinkLabel { Text = "October 2026 demo recipe data", AutoSize = true, LinkColor = Teal };
+        var source = new LinkLabel { Text = RecipeSnapshot, AutoSize = true, LinkColor = Teal };
         source.LinkClicked += (_, _) => OpenWebPage(SourceUrl);
         footer.Controls.Add(source);
         footer.Controls.Add(new Label { Text = $"·  {BatchRule}", ForeColor = Muted, AutoSize = true });
@@ -499,7 +500,7 @@ internal sealed partial class MainForm : Form
                 text.AppendLine($"  {item} ×{step.Batches * amount:N0}");
         }
 
-        text.AppendLine().AppendLine(BatchRule).AppendLine($"October 2026 demo recipe data · {SourceUrl}");
+        text.AppendLine().AppendLine(BatchRule).AppendLine($"{RecipeSnapshot} · {SourceUrl}");
         try
         {
             Clipboard.SetText(text.ToString());

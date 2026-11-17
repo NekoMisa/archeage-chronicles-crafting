@@ -46,7 +46,7 @@ The helper rounds up to whole packs for a requested reward and uses whole packs 
 
 ## Recipe data
 
-`recipes.json` contains 238 recipe entries for 196 items across nine professions. The catalog comes from the October 2026 Next Fest demo, so quantities and ingredient names can differ in Early Access. [ArcheAge Central demo catalog](https://archeagecentral.com/crafting)
+`recipes.json` contains 238 recipe variants for 196 items across nine professions, based on RaidDex's November 17, 2026 Early Access crafting data. The catalog includes ingredient quantities, gold fees, and batch variants from that snapshot. [RaidDex crafting catalog](https://raiddex.com/en/archeage-chronicles/crafting)
 
 Each listed item uses its selected recipe variant for every batch, including batches needed for other crafts. For intermediate items absent from the list, the planner uses the lowest-level recipe in the catalog, breaking level ties by smaller batch size. Ingredients with no catalog recipe go on the shopping list.
 
