@@ -3,6 +3,7 @@ namespace CraftingCalculator;
 internal sealed partial class MainForm
 {
     private readonly Dictionary<string, GatheredMaterial> gathered = new(StringComparer.OrdinalIgnoreCase);
+    private readonly Dictionary<(Recipe Recipe, string Item), StepMaterialMark> stepMaterials = [];
     private readonly LinkLabel gatheredToggle = new()
     {
         Dock = DockStyle.Bottom, Height = 24, LinkColor = Teal, Visible = false,
@@ -12,6 +13,23 @@ internal sealed partial class MainForm
     private IReadOnlyDictionary<string, long> remainingMaterials = new Dictionary<string, long>();
     private bool showingGathered;
     private bool updatingMaterials;
+
+    private long StepMaterialQuantity(Recipe recipe, string item) => stepMaterials.GetValueOrDefault((recipe, item))?.Quantity ?? 0;
+
+    private long StepCredit(string item) => currentProgress?.StepCredits.GetValueOrDefault(item) ?? 0;
+
+    private void ToggleStepIngredient(StepIngredient ingredient)
+    {
+        var recipe = ingredient.Progress.Step.Recipe;
+        var key = (recipe, ingredient.Item);
+        if (ingredient.Ready)
+            stepMaterials.Remove(key);
+        else
+            stepMaterials[key] = new StepMaterialMark(recipe, ingredient.Item, ingredient.Progress.PlanBatches, ingredient.Quantity);
+
+        RefreshProgress(keepPosition: true);
+        SaveActivePlan();
+    }
 
     private Control CreateMaterialChecklist()
     {
@@ -46,8 +64,10 @@ internal sealed partial class MainForm
         }
 
         afterCrafts = currentProgress?.Materials ?? new Dictionary<string, long>();
+        // The sidebar and the step list can confirm some of the same raw materials.
         remainingMaterials = afterCrafts
-            .Select(item => (item.Key, Quantity: item.Value - (gathered.GetValueOrDefault(item.Key)?.Quantity ?? 0)))
+            .Select(item => (item.Key, Quantity: item.Value - Math.Max(0,
+                (gathered.GetValueOrDefault(item.Key)?.Quantity ?? 0) - StepCredit(item.Key))))
             .Where(item => item.Quantity > 0)
             .ToDictionary(item => item.Key, item => item.Quantity, StringComparer.OrdinalIgnoreCase);
 
@@ -101,7 +121,7 @@ internal sealed partial class MainForm
             && plan.Materials.TryGetValue(item, out var original) && afterCrafts.TryGetValue(item, out var needed))
         {
             // Gathered quantities cover the outstanding part of the plan, after work already checked off.
-            gathered[item] = new GatheredMaterial(original, needed);
+            gathered[item] = new GatheredMaterial(original, needed + StepCredit(item));
         }
         else
             return;

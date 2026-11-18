@@ -171,15 +171,15 @@ internal sealed partial class MainForm : Form
 
         steps.NodeMouseDoubleClick += (_, e) =>
         {
-            if (e.Button == MouseButtons.Left)
+            if (e.Button == MouseButtons.Left && (steps.HitTest(e.Location).Location & TreeViewHitTestLocations.StateImage) == 0)
                 OpenMaterialSource(e.Node?.Tag);
         };
         steps.KeyDown += (_, e) =>
         {
-            if (e.KeyCode == Keys.Enter && steps.SelectedNode?.Tag is string item)
+            if (e.KeyCode == Keys.Enter && steps.SelectedNode?.Tag is string or StepIngredient)
             {
                 e.SuppressKeyPress = true;
-                OpenMaterialSource(item);
+                OpenMaterialSource(steps.SelectedNode.Tag);
             }
         };
 
@@ -201,6 +201,7 @@ internal sealed partial class MainForm : Form
             RefreshProgress(keepPosition: true);
             SaveActivePlan();
         };
+        steps.IngredientToggled += ToggleStepIngredient;
         FormClosing += (_, _) => SaveActivePlan();
         ActivatePlan(ActivePlan);
     }
@@ -409,23 +410,37 @@ internal sealed partial class MainForm : Form
 
     private void RefreshProgress(bool keepPosition = false)
     {
-        currentProgress = currentPlan?.AfterCrafts(steps.Completed);
+        if (stepMaterials.Count > 0)
+        {
+            var originalBatches = currentPlan?.Steps.ToDictionary(step => step.Recipe, step => step.Batches);
+            foreach (var entry in stepMaterials.Where(entry =>
+                originalBatches?.GetValueOrDefault(entry.Key.Recipe) != entry.Value.PlanBatches).Select(entry => entry.Key).ToArray())
+                stepMaterials.Remove(entry);
+        }
+
+        currentProgress = currentPlan?.AfterCrafts(steps.Completed, stepMaterials);
         steps.SetSteps(currentProgress, CreateStepNode, keepPosition);
         RefreshMaterials();
     }
 
-    private static TreeNode CreateStepNode(CraftStep step, int index)
+    private TreeNode CreateStepNode(ProgressStep progress, bool done)
     {
-        var title = StepTitle(step, index);
+        var step = progress.Step;
+        var title = StepTitle(step, progress.Order);
         var node = new TreeNode(title) { ToolTipText = $"{title}\nClick the checkbox or press Space to toggle completion." };
         node.Nodes.Add(StepDetails(step)).ForeColor = Muted;
         if (StepOutputNote(step) is { } note)
             node.Nodes.Add(note).ForeColor = Teal;
         foreach (var (item, amount) in step.Recipe.Materials)
         {
-            node.Nodes.Add(new TreeNode($"{item}  ×{step.Batches * amount:N0}")
+            var quantity = step.Batches * amount;
+            var ready = done ? 0 : StepMaterialQuantity(step.Recipe, item);
+            var partial = ready > 0 && ready < quantity ? $"  ({ready:N0} ready)" : "";
+            node.Nodes.Add(new TreeNode($"{item}  ×{quantity:N0}{partial}")
             {
-                Tag = item, ForeColor = Teal, ToolTipText = MaterialToolTip(item)
+                Tag = done ? item : new StepIngredient(progress, item, quantity, ready >= quantity),
+                ForeColor = ready >= quantity ? Muted : Teal,
+                ToolTipText = MaterialToolTip(item) + (done ? "" : "\nClick the checkbox or press Space to mark the displayed quantity ready or undo it.")
             });
         }
         return node;
@@ -435,6 +450,8 @@ internal sealed partial class MainForm : Form
 
     private void OpenMaterialSource(object? tag)
     {
+        if (tag is StepIngredient ingredient)
+            tag = ingredient.Item;
         if (tag is string item)
             OpenWebPage(MaterialSources.GetUrl(item));
     }
@@ -497,7 +514,11 @@ internal sealed partial class MainForm : Form
             if (StepOutputNote(step) is { } note)
                 text.AppendLine($"  {note}");
             foreach (var (item, amount) in step.Recipe.Materials)
-                text.AppendLine($"  {item} ×{step.Batches * amount:N0}");
+            {
+                var quantity = step.Batches * amount;
+                var ready = Math.Min(quantity, StepMaterialQuantity(step.Recipe, item));
+                text.AppendLine(ready > 0 ? $"  {item} ×{quantity:N0} ({ready:N0} ready)" : $"  {item} ×{quantity:N0}");
+            }
         }
 
         text.AppendLine().AppendLine(BatchRule).AppendLine($"{RecipeSnapshot} · {SourceUrl}");

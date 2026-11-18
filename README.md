@@ -26,6 +26,8 @@ The guide combines shared ingredients across the list before rounding up to whol
 
 Check off a crafting step to move it into **Done**. The guide hides prerequisites you no longer need and updates the quantities for prerequisites shared by other steps. Expand **Done** and uncheck a step to restore the work that is still needed. You can also select a step and press **Space**. Checkmarks reset for any step whose recipe or original batch count changes.
 
+Check off an ingredient under a pending step when that quantity is ready for that craft. The guide keeps the checked row visible so you can undo it. It updates **Materials to obtain** and recalculates how much of any shared intermediate still needs crafting. Ingredient checkmarks save with the plan. Select an ingredient and press **Space** to toggle it, or press **Enter** to open its source.
+
 ## Saved plans and inventory
 
 Use **New…** to start a separate named plan and the **Plan** dropdown to switch between plans. The app saves each plan's craft list, checkmarks, and inventory locally and reopens the last active plan.

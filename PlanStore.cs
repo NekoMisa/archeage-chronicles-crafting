@@ -22,6 +22,7 @@ internal sealed record SavedTarget(string Item, string Profession, int Level, in
 
 internal sealed record CompletedBatch(Recipe Recipe, long Batches, long? PlanBatches = null);
 internal sealed record GatheredMaterial(long PlanQuantity, long Quantity);
+internal sealed record StepMaterialMark(Recipe Recipe, string Item, long PlanBatches, long Quantity);
 
 internal sealed class SavedPlan
 {
@@ -32,6 +33,7 @@ internal sealed class SavedPlan
     public Dictionary<string, long> Inventory { get; set; } = new(StringComparer.OrdinalIgnoreCase);
     public CompletedBatch[] Completed { get; set; } = [];
     public Dictionary<string, GatheredMaterial> Gathered { get; set; } = new(StringComparer.OrdinalIgnoreCase);
+    public StepMaterialMark[] StepMaterials { get; set; } = [];
 }
 
 internal sealed class PlanBook

@@ -79,19 +79,21 @@ internal sealed record CraftStep(Recipe Recipe, long Batches, long Needed, long 
 internal sealed record ProgressStep(CraftStep Step, int Order, long PlanBatches);
 
 internal sealed record CraftingProgress(IReadOnlyList<ProgressStep> Pending, IReadOnlyList<ProgressStep> Done,
-    IReadOnlyDictionary<string, long> Materials);
+    IReadOnlyDictionary<string, long> Materials, IReadOnlyDictionary<string, long> StepCredits);
 
 internal sealed record CraftingPlan(IReadOnlyList<CraftTarget> Targets, IReadOnlyList<CraftStep> Steps,
     IReadOnlyDictionary<string, long> Materials, IReadOnlyDictionary<string, long> UsedInventory)
 {
     public long Gold => Steps.Sum(step => step.Gold);
 
-    public CraftingProgress AfterCrafts(IEnumerable<CompletedBatch> completed)
+    public CraftingProgress AfterCrafts(IEnumerable<CompletedBatch> completed,
+        IReadOnlyDictionary<(Recipe Recipe, string Item), StepMaterialMark>? stepMaterials = null)
     {
         var completion = completed.ToDictionary(batch => batch.Recipe);
-        if (completion.Count == 0)
+        var covered = new Dictionary<string, long>(StringComparer.OrdinalIgnoreCase);
+        if (completion.Count == 0 && (stepMaterials is null || stepMaterials.Count == 0))
             return new CraftingProgress(Steps.Select((step, index) => new ProgressStep(step, index, step.Batches)).ToArray(),
-                [], Materials);
+                [], Materials, covered);
 
         var demand = Targets.ToDictionary(target => target.Recipe.Item, target => target.Quantity,
             StringComparer.OrdinalIgnoreCase);
@@ -115,8 +117,10 @@ internal sealed record CraftingPlan(IReadOnlyList<CraftTarget> Targets, IReadOnl
             if (!demand.Remove(step.Recipe.Item, out var needed))
                 continue;
 
-            // Stock allocated in the original plan may already have gone into completed crafts.
-            var remaining = Math.Min(needed, step.Needed) - completedUnits;
+            // Preserve the original inventory allocation and count only new credit from ingredient checks.
+            var fromCrafting = Math.Min(needed, step.Needed);
+            var ready = Math.Max(0, covered.GetValueOrDefault(step.Recipe.Item) - (needed - fromCrafting));
+            var remaining = Math.Max(step.Requested, fromCrafting - ready) - completedUnits;
             if (remaining <= 0)
                 continue;
 
@@ -126,16 +130,29 @@ internal sealed record CraftingPlan(IReadOnlyList<CraftTarget> Targets, IReadOnl
                 Batches = batches, Needed = remaining, Requested = Math.Max(0, step.Requested - completedUnits)
             }, index, step.Batches));
             foreach (var (item, amount) in step.Recipe.Materials)
-                demand[item] = checked(demand.GetValueOrDefault(item) + batches * amount);
+            {
+                var quantity = batches * amount;
+                demand[item] = checked(demand.GetValueOrDefault(item) + quantity);
+                if (stepMaterials?.GetValueOrDefault((step.Recipe, item)) is { } mark && mark.PlanBatches == step.Batches)
+                    covered[item] = checked(covered.GetValueOrDefault(item) + Math.Min(quantity, mark.Quantity));
+            }
         }
 
-        var remainingMaterials = Materials.Select(material =>
-                (material.Key, Quantity: Math.Min(material.Value, demand.GetValueOrDefault(material.Key))))
-            .Where(material => material.Quantity > 0)
-            .ToDictionary(material => material.Key, material => material.Quantity, StringComparer.OrdinalIgnoreCase);
+        var remainingMaterials = new Dictionary<string, long>(StringComparer.OrdinalIgnoreCase);
+        var stepCredits = new Dictionary<string, long>(StringComparer.OrdinalIgnoreCase);
+        foreach (var (item, original) in Materials)
+        {
+            var total = demand.GetValueOrDefault(item);
+            var needed = Math.Min(original, total);
+            var ready = Math.Clamp(covered.GetValueOrDefault(item) - (total - needed), 0, needed);
+            if (ready > 0)
+                stepCredits[item] = ready;
+            if (needed > ready)
+                remainingMaterials[item] = needed - ready;
+        }
         pending.Reverse();
         done.Reverse();
-        return new CraftingProgress(pending, done, remainingMaterials);
+        return new CraftingProgress(pending, done, remainingMaterials, stepCredits);
     }
 }
 
